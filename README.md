@@ -60,6 +60,7 @@ and the follow-up calls `run_stream()` on the **same team object**, so the agent
 | `tests/test_guardrails.py` | pytest suite (51 tests) |
 | `sample_data/sales_2026.csv` | 12,480 synthetic orders, Jan–Dec 2026 |
 | `Dockerfile`, `.dockerignore` | code-sandbox image `datapilot-sandbox` (build context excludes `.env`) |
+| `deploy/app.Dockerfile`, `deploy/docker-compose.yml` | app container behind Traefik with HTTPS + basic auth |
 
 ---
 
@@ -106,6 +107,36 @@ streamlit run app.py                         # add --server.port 8503 if 8501 is
 python team.py "Why did Electronics revenue drop in September 2026 compared to August?"   # terminal smoke test
 python -m pytest -q                          # guardrail tests
 ```
+
+### Deploy to a VPS (Traefik + HTTPS + password)
+
+`deploy/` runs the app as a container behind an **existing Traefik** reverse proxy (Docker provider, external network
+`n8n_default`, cert resolver `mytlschallenge` — adjust these names in `deploy/docker-compose.yml` for your server).
+Analysis code still runs in separate `datapilot-sandbox` containers, started through the Docker socket; they never see
+the API key.
+
+```bash
+# on the server (Ubuntu + Docker); the repo MUST live at /opt/datapilot (sandbox bind-mount paths)
+git clone https://github.com/sundaji1969/Datapilot_self-correct_data-analyst.git /opt/datapilot
+cd /opt/datapilot
+mkdir -p sandbox && chown -R 1000:1000 sandbox
+cp .env.example .env && nano .env && chown 1000:1000 .env && chmod 600 .env     # OPENAI_API_KEY=...
+docker build -t datapilot-sandbox .
+
+# deploy/.env — never committed; single quotes stop Compose expanding the $ in the hash
+cat > deploy/.env <<EOF
+DATAPILOT_HOST=datapilot.example.com
+DATAPILOT_AUTH='datapilot:$(openssl passwd -apr1)'
+DOCKER_GID=$(getent group docker | cut -d: -f3)
+EOF
+chmod 600 deploy/.env
+
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+```
+
+Then add a DNS **A record** for `DATAPILOT_HOST` pointing at the server; Traefik issues the HTTPS certificate on the
+first visit. Visitors must log in (Traefik basic auth). The app container runs as uid 1000 with a 1 GB memory limit and
+no published port. **Update:** `git pull` and re-run the `docker compose … up -d --build` line.
 
 ### Settings (`.env`)
 

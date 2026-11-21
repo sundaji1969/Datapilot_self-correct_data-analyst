@@ -1,0 +1,40 @@
+# DataPilot behind an existing Traefik (Docker provider, network n8n_default, cert resolver mytlschallenge).
+# Run from the repo root on the server:   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+# deploy/.env (never committed) must define:
+#   DATAPILOT_HOST=datapilot.example.com
+#   DATAPILOT_AUTH=user:<apr1/bcrypt hash>     (e.g. printf 'user:%s\n' "$(openssl passwd -apr1)")
+#   DOCKER_GID=<gid of the host's docker group>  (getent group docker | cut -d: -f3)
+# The repo must live at /opt/datapilot: the sandbox folder is bind-mounted at the SAME path, because the
+# sandbox containers are started by the host's Docker daemon and their bind mounts use host paths.
+name: datapilot
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/app.Dockerfile
+    image: datapilot-app:latest
+    restart: unless-stopped
+    user: "1000:1000"
+    group_add: ["${DOCKER_GID}"]
+    mem_limit: 1g
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock        # to start datapilot-sandbox containers
+      - /opt/datapilot/sandbox:/opt/datapilot/sandbox    # same path inside and outside (see above)
+      - /opt/datapilot/.env:/opt/datapilot/.env:ro        # API key; never mounted into sandbox containers
+    networks: [n8n_default]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: n8n_default
+      traefik.http.routers.datapilot.rule: Host(`${DATAPILOT_HOST}`)
+      traefik.http.routers.datapilot.entrypoints: websecure
+      traefik.http.routers.datapilot.tls: "true"
+      traefik.http.routers.datapilot.tls.certresolver: mytlschallenge
+      traefik.http.routers.datapilot.middlewares: datapilot-auth,datapilot-hsts
+      traefik.http.middlewares.datapilot-auth.basicauth.users: ${DATAPILOT_AUTH}
+      traefik.http.middlewares.datapilot-hsts.headers.stsSeconds: "31536000"
+      traefik.http.services.datapilot.loadbalancer.server.port: "8501"
+
+networks:
+  n8n_default:
+    external: true
