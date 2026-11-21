@@ -5,7 +5,7 @@ Self-correcting data analyst (Social Eagle Use Case 03). Full spec: `DataPilot_C
 ## Stack (do not change without asking)
 - AutoGen AgentChat **v0.4+ API** (installed 0.7.5): `AssistantAgent` ×3 (Planner, Coder, Reviewer), `CodeExecutorAgent`, `SelectorGroupChat` (deterministic `selector_func`, default) or `RoundRobinGroupChat` via `TEAM_MODE`. Never legacy `pyautogen` / `ConversableAgent`.
 - Termination: `TextMentionTermination("APPROVED") | MaxMessageTermination(12)`.
-- Executor: `DockerCommandLineCodeExecutor`, fallback `LocalCommandLineCodeExecutor(work_dir="sandbox/")` with a yellow UI warning.
+- Executor: `DockerCommandLineCodeExecutor` on image `datapilot-sandbox` (`docker build -t datapilot-sandbox .`), fallback `LocalCommandLineCodeExecutor(work_dir="sandbox/")` with a yellow UI warning.
 - LLM: `LLM_PROVIDER=openai` (default for this project, `gpt-4.1` / `gpt-4.1-mini`) or `anthropic`. `temperature=0`.
 - pandas, numpy, matplotlib (Agg), openpyxl, Streamlit, Pydantic v2 + pydantic-settings.
 - No auth, DB, FastAPI, LangChain, CrewAI. No new dependencies without asking.

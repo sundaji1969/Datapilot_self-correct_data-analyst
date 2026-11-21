@@ -59,6 +59,7 @@ and the follow-up calls `run_stream()` on the **same team object**, so the agent
 | `config.py` | `Settings` (pydantic-settings, `.env`) |
 | `tests/test_guardrails.py` | pytest suite (51 tests) |
 | `sample_data/sales_2026.csv` | 12,480 synthetic orders, Jan–Dec 2026 |
+| `Dockerfile`, `.dockerignore` | code-sandbox image `datapilot-sandbox` (build context excludes `.env`) |
 
 ---
 
@@ -78,22 +79,25 @@ copy .env.example .env          # macOS/Linux: cp .env.example .env
 # edit .env → OPENAI_API_KEY=sk-...
 ```
 
-**Optional — Docker sandbox.** Build the sandbox image once (the app uses it automatically when Docker is running):
+**Docker sandbox (recommended).** Start Docker Desktop and build the sandbox image once:
 
 ```bash
-docker build -t datapilot-sandbox - <<'EOF'
-FROM python:3.12-slim
-RUN pip install --no-cache-dir pandas==3.1.1 numpy==2.5.5 matplotlib==3.11.2 openpyxl==3.1.5
-EOF
+docker build -t datapilot-sandbox .
 ```
 
-PowerShell:
+The image (`Dockerfile`) is `python:3.12-slim` + the pinned data libraries, running as a non-root `sandbox` user.
+When Docker is running and the image exists, the app uses it automatically (🟢 Docker in the sidebar). Without it,
+the app runs code in the local `sandbox/` folder and shows a 🟡 warning.
 
-```powershell
-"FROM python:3.12-slim`nRUN pip install --no-cache-dir pandas==3.1.1 numpy==2.5.5 matplotlib==3.11.2 openpyxl==3.1.5" | docker build -t datapilot-sandbox -
+**Slow or unstable network inside Docker** (build fails with `Read timed out` from `files.pythonhosted.org`)?
+Download the Linux packages on the host first, then build — pip installs them offline from `./wheels`:
+
+```bash
+pip download --only-binary=:all: --platform manylinux2014_x86_64 --platform manylinux_2_28_x86_64 \
+  --python-version 3.12 --implementation cp -d wheels \
+  pandas==3.1.1 numpy==2.5.5 matplotlib==3.11.2 openpyxl==3.1.5
+docker build -t datapilot-sandbox .
 ```
-
-Without the image (or with Docker stopped) the app runs code in the local `sandbox/` folder and shows a 🟡 warning.
 
 **Run**
 
@@ -183,6 +187,10 @@ Coder `Fixed: …` with a full rewrite → `VALIDATION: PASSED` → `APPROVED` (
 
 ## Known limitations
 
-- On machines where Docker containers have no internet access, the sandbox image can't be built; the app then uses the
-  local sandbox (AST-checked, time-limited, but not OS-isolated).
+- If Docker isn't running or the image isn't built, the app uses the local sandbox (AST-checked, time-limited, but
+  not OS-isolated).
+- With Docker, the sandbox container has a fixed name (`datapilot-exec`) so abandoned browser sessions can't pile up
+  containers; the trade-off is one active analysis session at a time (a new session replaces the container).
+- AutoGen's Docker executor has no option to disable container networking; network access from analysis code is
+  blocked by the AST import allow-list instead (no `socket`, `requests`, `urllib`).
 - With no `scipy` allowed, statistical tests are implemented by hand (e.g. a normal approximation for a t-test p-value).

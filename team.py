@@ -107,15 +107,24 @@ def docker_image_ready() -> bool:
         return False
 
 
-async def make_executor(settings: Settings, work_dir: Path, state: RunState) -> tuple[GuardedExecutor, bool]:
+async def make_executor(
+    settings: Settings, work_dir: Path, state: RunState, container_name: str = "datapilot-exec"
+) -> tuple[GuardedExecutor, bool]:
     """Docker first (if enabled, running and the image is built), else LocalCommandLineCodeExecutor in work_dir.
-    Returns (executor, docker?)."""
+    Returns (executor, docker?).
+
+    The container has a fixed name: starting a new one replaces any leftover with the same name, so abandoned
+    Streamlit sessions can never pile up containers. stop_container=False skips AutoGen's asyncio_atexit hook
+    (it recurses when a loop is garbage-collected unclosed); close()/check_reproducible() stop containers explicitly."""
     work_dir.mkdir(parents=True, exist_ok=True)
     if settings.USE_DOCKER and docker_image_ready():
         from autogen_ext.code_executors.docker import DockerCommandLineCodeExecutor
 
         docker_exec = GuardedExecutor(
-            DockerCommandLineCodeExecutor(image=SANDBOX_IMAGE, work_dir=work_dir, timeout=settings.EXEC_TIMEOUT_S),
+            DockerCommandLineCodeExecutor(
+                image=SANDBOX_IMAGE, container_name=container_name, work_dir=work_dir,
+                timeout=settings.EXEC_TIMEOUT_S, stop_container=False,
+            ),
             state,
         )
         await docker_exec.start()
@@ -263,7 +272,7 @@ async def check_reproducible(settings: Settings, work_dir: Path, original: Analy
     shutil.copytree(work_dir / "data", repro / "data")
     script = (work_dir / "analysis.py").read_text(encoding="utf-8")
     state = RunState(work_dir=repro)
-    executor, _ = await make_executor(settings, repro, state)
+    executor, _ = await make_executor(settings, repro, state, container_name="datapilot-repro")
     try:
         await executor.execute_code_blocks([CodeBlock(code=script, language="python")], CancellationToken())
     finally:
