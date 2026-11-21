@@ -26,14 +26,14 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: n8n_default
-      traefik.http.routers.datapilot.rule: Host(`${DATAPILOT_HOST}`)
-      traefik.http.routers.datapilot.entrypoints: websecure
-      traefik.http.routers.datapilot.tls: "true"
-      traefik.http.routers.datapilot.tls.certresolver: mytlschallenge
-      traefik.http.routers.datapilot.middlewares: datapilot-auth,datapilot-hsts
+      traefik.http.routers.datapilot-web.rule: Host(`${DATAPILOT_HOST}`)
+      traefik.http.routers.datapilot-web.entrypoints: websecure
+      traefik.http.routers.datapilot-web.tls: "true"
+      traefik.http.routers.datapilot-web.tls.certresolver: mytlschallenge
+      traefik.http.routers.datapilot-web.middlewares: datapilot-auth,datapilot-hsts
       traefik.http.middlewares.datapilot-auth.basicauth.users: ${DATAPILOT_AUTH}
       traefik.http.middlewares.datapilot-hsts.headers.stsSeconds: "31536000"
-      traefik.http.services.datapilot.loadbalancer.server.port: "8501"
+      traefik.http.services.datapilot-web.loadbalancer.server.port: "8501"
 
 networks:
   n8n_default:
