@@ -20,6 +20,7 @@ from guardrails import (
     excel_sheets,
     load_table,
     normalise_columns,
+    parse_dates,
     prepare_sandbox,
 )
 
@@ -130,7 +131,7 @@ def load_upload() -> None:
         st.markdown("### 📂 Data")
         up = st.file_uploader("Upload sales data", type=["csv", "xlsx"], label_visibility="collapsed")
         if up is None:
-            st.caption("Upload a .csv or .xlsx file (≤ 25 MB). Try `sample_data/sales_2026.csv`.")
+            st.caption("Upload a .csv or .xlsx file (≤ 25 MB). Try `sample_data/sales_2026_profit_loss_20pct_loss.csv`.")
             return
         data = up.getvalue()
         try:
@@ -143,6 +144,7 @@ def load_upload() -> None:
             if sig != ss().file_sig:
                 df_raw = load_table(data, up.name, SETTINGS.MAX_ROWS, sheet)
                 df, mapping = normalise_columns(df_raw)
+                df = parse_dates(df)
                 ss().update(df=df, mapping=mapping, profile=build_profile(df, up.name, sheet), file_sig=sig,
                             data_path=prepare_sandbox(WORK_DIR, df, up.name), log=[], run=None, error=None)
                 close_team()
@@ -269,6 +271,15 @@ def run_question(question: str, follow_up: bool, progress, chat) -> None:
 
 
 # ------------------------------------------------------------------------- results
+def _is_profit_metric(name: str) -> bool:
+    return bool(re.search(r"profit|loss|margin", name, re.I))
+
+
+def _is_loss_metric(name: str) -> bool:
+    """'total_loss' / 'loss_orders' hold positive amounts that ARE losses; 'profit_loss' (net) does not."""
+    return bool(re.search(r"loss", name, re.I)) and not re.search(r"profit_?loss|net", name, re.I)
+
+
 def show_results(run: dict) -> None:
     if run.get("cannot_answer") is not None:
         st.warning(f"**This question can't be answered from the uploaded columns.** {run['cannot_answer']}")
@@ -301,10 +312,13 @@ def show_results(run: dict) -> None:
         else:
             st.warning("The written answer contained numbers that are not in result.json "
                        f"({', '.join(run['ungrounded'])}), so only the validated findings are shown.")
-        metrics = list(res.metrics.items())[:4]
-        if metrics:
-            for col, (k, v) in zip(st.columns(len(metrics)), metrics):
-                col.metric(k.replace("_", " ").title(), f"{v:,.2f}")
+        metrics = list(res.metrics.items())
+        for i in range(0, len(metrics), 4):  # all metrics, 4 per row; profit green, loss red
+            for col, (k, v) in zip(st.columns(4), metrics[i:i + 4]):
+                tag = ("Loss" if v < 0 or _is_loss_metric(k) else "Profit") if _is_profit_metric(k) and v else None
+                col.metric(k.replace("_", " ").title(), f"{v:,.2f}", delta=tag,
+                           delta_color="red" if tag == "Loss" else "green",
+                           delta_arrow="down" if tag == "Loss" else "up")
         if res.findings:
             st.dataframe(pd.DataFrame([f.model_dump() for f in res.findings]), hide_index=True, width="stretch")
     with t_charts:
@@ -347,7 +361,8 @@ progress.markdown(progress_html(None, 5 if (ss().run or {}).get("approved") else
 
 if ss().df is None:
     st.info("Upload a sales CSV or Excel file in the sidebar, then ask a question such as "
-            "**“Why did Electronics revenue drop in September 2026 compared to August?”**")
+            "**“Why did Electronics revenue drop in September 2026 compared to August?”** or "
+            "**“Which category and region made the biggest loss in 2026?”**")
     st.stop()
 
 if ss().bundle is None:

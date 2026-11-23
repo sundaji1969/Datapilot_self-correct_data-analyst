@@ -294,17 +294,18 @@ async def close(bundle: Bundle) -> None:
 async def _smoke(question: str) -> None:
     import pandas as pd
 
-    from guardrails import build_profile, normalise_columns, prepare_sandbox
+    from guardrails import build_profile, normalise_columns, parse_dates, prepare_sandbox
 
     settings = Settings()
     work_dir = Path("sandbox").resolve()
-    df, _ = normalise_columns(pd.read_csv("sample_data/sales_2026.csv"))
-    data_path = prepare_sandbox(work_dir, df, "sales_2026.csv")
+    df, _ = normalise_columns(pd.read_csv("sample_data/sales_2026_profit_loss_20pct_loss.csv"))
+    df = parse_dates(df)
+    data_path = prepare_sandbox(work_dir, df, "sales_2026_profit_loss_20pct_loss.csv")
     bundle = await build_team(settings, work_dir)
     print(f"executor: {'Docker' if bundle.using_docker else 'LOCAL sandbox (Docker unavailable)'} | mode: {settings.TEAM_MODE}")
     try:
         tokens, n, last, stop = 0, 0, None, ""
-        async for msg in bundle.team.run_stream(task=make_task(question, data_path, build_profile(df, "sales_2026.csv"))):
+        async for msg in bundle.team.run_stream(task=make_task(question, data_path, build_profile(df, "sales_2026_profit_loss_20pct_loss.csv"))):
             if isinstance(msg, BaseChatMessage):
                 n += 1
                 last = msg

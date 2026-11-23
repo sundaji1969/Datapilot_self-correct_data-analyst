@@ -58,7 +58,7 @@ and the follow-up calls `run_stream()` on the **same team object**, so the agent
 | `guardrails.py` | input, code-safety and output checks (no LLM) |
 | `config.py` | `Settings` (pydantic-settings, `.env`) |
 | `tests/test_guardrails.py` | pytest suite (51 tests) |
-| `sample_data/sales_2026.csv` | 12,480 synthetic orders, Jan–Dec 2026 |
+| `sample_data/sales_2026_profit_loss_20pct_loss.csv` | 12,480 synthetic orders, Jan–Dec 2026, with cost, profit and loss (20% loss-making orders) |
 | `Dockerfile`, `.dockerignore` | code-sandbox image `datapilot-sandbox` (build context excludes `.env`) |
 | `deploy/app.Dockerfile`, `deploy/docker-compose.yml` | app container behind Traefik with HTTPS + basic auth |
 
@@ -155,7 +155,11 @@ no published port. **Update:** `git pull` and re-run the `docker compose … up 
 
 ## Sample input → output
 
-**Input:** `sample_data/sales_2026.csv` — columns `order_date, region, category, product, units, unit_price, discount`
+**Input:** `sample_data/sales_2026_profit_loss_20pct_loss.csv` — columns `order_date` (DD-MM-YYYY), `region, category, product, units, unit_price in INR,
+discount, sold_price, cost_price, revenue, total_cost, profit, loss, profit_loss, status`. When cost/profit columns
+are present, every answer also reports total profit, total loss, net profit/loss, margin % and loss-making orders.
+
+_The transcript below was recorded on the earlier revenue-only file._
 
 **Question:** _Why did Electronics revenue drop in September 2026 compared to August?_
 

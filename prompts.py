@@ -13,7 +13,14 @@ You receive a business question and a JSON profile of a sales table (column name
 
 Your job: write a numbered plan of 3-6 short steps that answers the question with pandas.
 - Use ONLY the real column names from the profile, exactly as written.
-- If revenue is needed, state the formula from the actual columns, e.g. revenue = units * unit_price * (1 - discount).
+- If revenue is needed and there is no revenue column, state the formula from the actual columns,
+  e.g. revenue = units * unit_price * (1 - discount). If the table already has revenue / cost / profit columns, use them as-is.
+- PROFIT AND LOSS: if the table has cost or profit/loss columns (e.g. cost_price, total_cost, profit, loss,
+  profit_loss, status), every plan must also report profit and loss for the same filter/comparison:
+  total profit (sum of profit), total loss (sum of loss), net profit/loss (sum of profit_loss, or revenue - total_cost),
+  profit margin % (net / revenue * 100) and the number of loss-making orders. For "why" questions, also say which
+  combination drives the change in net profit/loss. If there are no cost columns, profit cannot be computed — say so
+  only when the question asks for it (CANNOT_ANSWER).
 - Say which comparison, grouping and chart(s) will answer the question.
 - For "why" / driver questions, break the change down by EVERY relevant categorical column (e.g. region AND product)
   and say which combination contributes most of the change.
@@ -41,6 +48,9 @@ Rules for the script:
 {schema}
   * "metrics": the key numbers as plain floats only (e.g. totals, % change) — never text or codes for names.
   * "findings": the main drivers, each with label, value, unit; names such as the top region go in the label.
+  * If the data has profit/loss columns, also put these in "metrics" for the analysed slice: total_revenue,
+    total_cost, total_profit, total_loss (a positive amount), net_profit_loss (negative = net loss),
+    profit_margin_pct and loss_orders. Losses are real values: keep the minus sign on net_profit_loss.
   * "charts": one entry per saved PNG, with path "outputs/<name>.png" and the same title/axis labels used on the chart.
   * Convert numpy numbers with float(); round to 2 decimals; no NaN or inf.
 - Deterministic: no randomness; sort grouped results before reporting.
@@ -58,11 +68,14 @@ The Executor message shows the exit code / output, and a VALIDATION line added b
 
 Check:
 1. The script ran successfully and VALIDATION is PASSED.
-2. Numbers are sensible: no negative revenue or units, percentages within -100..100 where they are shares or changes,
-   parts add up to totals where both are reported.
-3. The result actually answers the user's question. For "why" questions the findings must name the drivers in every
+2. Numbers are sensible: no negative revenue, cost or units, percentages within -100..100 where they are shares or changes,
+   parts add up to totals where both are reported. Negative profit / net_profit_loss is VALID (it is a loss), but
+   net_profit_loss must equal total_profit - total_loss and total_revenue - total_cost when those are reported.
+3. If the data has cost or profit/loss columns, the result must include profit and loss (total profit, total loss,
+   net profit/loss, margin %); if they are missing, give FEEDBACK.
+4. The result actually answers the user's question. For "why" questions the findings must name the drivers in every
    relevant dimension of the data (e.g. both region and product); if one is missing, give FEEDBACK.
-4. Every chart has a title and axis labels with units.
+5. Every chart has a title and axis labels with units.
 
 Reply format — exactly one of:
 - FEEDBACK:
@@ -80,7 +93,8 @@ def answer_prompt() -> str:
 Do not calculate new numbers or invent any. You may round, and show rupees as ₹ or in lakh (₹ X.XX L = value / 100000).
 Return JSON matching this schema:
 {schema}
-- answer: 2-4 plain-English sentences that directly answer the question with the key numbers.
+- answer: 2-4 plain-English sentences that directly answer the question with the key numbers. If result.json has
+  profit/loss metrics, include one sentence on net profit or loss (say "loss of ₹X" for negative values) and margin.
 - where_it_came_from: one sentence naming the data file, the columns/formula used and that it was computed by analysis.py.
 - files: the chart paths and "analysis.py".
 - suggested_next_question: one useful follow-up question that can be answered from the same data columns

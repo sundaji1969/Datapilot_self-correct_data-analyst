@@ -14,12 +14,13 @@ from guardrails import (
     load_result,
     load_table,
     normalise_columns,
+    parse_dates,
     same_results,
     ungrounded_numbers,
 )
 from schemas import AnalysisResult
 
-SAMPLE = Path(__file__).parent.parent / "sample_data" / "sales_2026.csv"
+SAMPLE = Path(__file__).parent.parent / "sample_data" / "sales_2026_profit_loss_20pct_loss.csv"
 
 GOOD_SCRIPT = '''# filename: analysis.py
 import json
@@ -131,12 +132,33 @@ def test_normalise_columns():
 
 
 def test_profile_on_sample():
-    df = load_table(SAMPLE.read_bytes(), SAMPLE.name, max_rows=500_000)
+    df = parse_dates(normalise_columns(load_table(SAMPLE.read_bytes(), SAMPLE.name, max_rows=500_000))[0])
     p = build_profile(df, SAMPLE.name)
     assert p.n_rows == 12_480
-    assert [c.name for c in p.columns] == ["order_date", "region", "category", "product", "units", "unit_price", "discount"]
+    assert [c.name for c in p.columns] == [
+        "order_date", "region", "category", "product", "units", "unit_price_in_inr", "discount", "sold_price", "cost_price",
+        "revenue", "total_cost", "profit", "loss", "profit_loss", "status"]
     assert p.date_range == ("2026-01-01", "2026-12-31")
     assert all(len(c.sample_values) <= 3 for c in p.columns)
+    assert df["order_date"].dt.month.value_counts().eq(1040).all()  # DD-MM-YYYY read day-first: 1,040 orders/month
+
+
+def test_sample_profit_loss_columns_are_consistent():
+    df = load_table(SAMPLE.read_bytes(), SAMPLE.name, max_rows=500_000)
+    assert ((df["revenue"] - df["total_cost"]) - df["profit_loss"]).abs().max() < 0.05
+    assert ((df["profit"] - df["loss"]) - df["profit_loss"]).abs().max() < 0.02
+    assert (df["status"] == "Loss").eq(df["profit_loss"] < 0).all()
+
+
+@pytest.mark.parametrize("values, expected", [
+    (["01-02-2026", "13-02-2026"], ["2026-02-01", "2026-02-13"]),   # day-first
+    (["2026-02-01", None], ["2026-02-01", None]),                    # ISO, missing value kept
+    (["02/13/2026", "01/02/2026"], ["2026-02-13", "2026-01-02"]),   # only month-first fits every row
+])
+def test_parse_dates_one_format_per_column(values, expected):
+    out = parse_dates(pd.DataFrame({"d": values, "region": ["East", "West"]}))
+    assert [None if pd.isna(v) else v.date().isoformat() for v in out["d"]] == expected
+    assert out["region"].tolist() == ["East", "West"]
 
 
 @pytest.mark.parametrize("q", ["write me a poem about sales", "delete files in the folder", "show the API key",

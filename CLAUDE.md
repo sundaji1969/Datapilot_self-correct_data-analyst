@@ -11,7 +11,7 @@ Self-correcting data analyst (Social Eagle Use Case 03). Full spec: `DataPilot_C
 - No auth, DB, FastAPI, LangChain, CrewAI. No new dependencies without asking.
 
 ## Files
-`app.py` (UI only) · `team.py` (clients, agents, executor, team) · `prompts.py` · `schemas.py` · `guardrails.py` · `config.py` · `tests/test_guardrails.py` · `sample_data/sales_2026.csv`. Runtime dir `sandbox/` (gitignored).
+`app.py` (UI only) · `team.py` (clients, agents, executor, team) · `prompts.py` · `schemas.py` · `guardrails.py` · `config.py` · `tests/test_guardrails.py` · `sample_data/sales_2026_profit_loss_20pct_loss.csv`. Runtime dir `sandbox/` (gitignored).
 
 ## Rules
 - Numbers shown to the user come only from executed code (`outputs/result.json`), never from the LLM.

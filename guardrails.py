@@ -75,6 +75,27 @@ def normalise_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, str]]:
     return df.rename(columns=dict(zip(df.columns, mapping.values()))), mapping
 
 
+# Day-first before month-first: Indian sales data writes 01-02-2026 for 1 February.
+_DATE_FORMATS = ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y", "%Y/%m/%d", "%m/%d/%Y", "%m-%d-%Y")
+
+
+def parse_dates(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert text date columns to real dates using ONE explicit format per column, so '01-02-2026' is never
+    read as 1 Feb in some rows and 2 Jan in others. The sandbox copy is then written as ISO dates (2026-02-01)."""
+    out = df.copy()
+    for col in df.columns:
+        s = df[col]
+        if pd.api.types.is_numeric_dtype(s) or pd.api.types.is_datetime64_any_dtype(s) or s.notna().sum() == 0:
+            continue
+        text = s.astype("string").str.strip()
+        for fmt in _DATE_FORMATS:
+            parsed = pd.to_datetime(text, format=fmt, errors="coerce")
+            if parsed.notna().sum() == s.notna().sum():
+                out[col] = parsed
+                break
+    return out
+
+
 def build_profile(df: pd.DataFrame, file_name: str, sheet_name: str | None = None) -> DatasetProfile:
     columns, dates = [], []
     for col in df.columns:
